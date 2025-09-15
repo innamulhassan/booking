@@ -1,0 +1,166 @@
+{
+  "agent": {
+    "name": "therapy_booking_agent",
+    "description": "AI agent for managing therapy appointment bookings via WhatsApp",
+    "version": "1.0.0",
+    "language": "en"
+  },
+  "intents": [
+    {
+      "name": "greeting",
+      "description": "Handle welcome messages and initial greetings",
+      "training_phrases": [
+        "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
+        "start", "help", "i need help", "what can you do"
+      ],
+      "response_templates": [
+        "Hello! I'm your therapy booking assistant. I can help you schedule appointments, check availability, and answer questions about our services.",
+        "Hi there! How can I assist you with booking your therapy appointment today?",
+        "Welcome! I'm here to help you book therapy sessions. What would you like to know?"
+      ]
+    },
+    {
+      "name": "book_appointment",
+      "description": "Handle appointment booking requests",
+      "training_phrases": [
+        "book appointment", "schedule session", "i want to book", "need appointment",
+        "book therapy", "schedule therapy", "make appointment", "reserve slot",
+        "i need therapy session", "can i book", "available times", "book for tomorrow"
+      ],
+      "parameters": [
+        {
+          "name": "service_type",
+          "entity": "service_type",
+          "required": true,
+          "prompts": ["Would you prefer in-call (we come to you) or out-call (you visit our clinic)?"]
+        },
+        {
+          "name": "date_time",
+          "entity": "date_time",
+          "required": true,
+          "prompts": ["What date and time would work best for you?"]
+        },
+        {
+          "name": "service_description",
+          "entity": "text",
+          "required": false,
+          "prompts": ["Could you tell me what type of therapy service you need?"]
+        }
+      ]
+    },
+    {
+      "name": "check_availability",
+      "description": "Check available appointment slots",
+      "training_phrases": [
+        "check availability", "available times", "free slots", "when available",
+        "show schedule", "what times", "open slots", "available appointments"
+      ],
+      "parameters": [
+        {
+          "name": "date",
+          "entity": "date",
+          "required": false,
+          "prompts": ["Which date would you like to check?"]
+        }
+      ]
+    },
+    {
+      "name": "get_services",
+      "description": "Provide information about available services",
+      "training_phrases": [
+        "what services", "types of therapy", "service options", "what do you offer",
+        "therapy types", "treatment options", "services available", "help options"
+      ]
+    },
+    {
+      "name": "modify_appointment",
+      "description": "Handle appointment changes and cancellations",
+      "training_phrases": [
+        "change appointment", "reschedule", "cancel appointment", "modify booking",
+        "different time", "move appointment", "update booking", "cancel session"
+      ]
+    },
+    {
+      "name": "confirm_appointment",
+      "description": "Handle appointment confirmations",
+      "training_phrases": [
+        "yes", "confirm", "ok", "accept", "agree", "that works", "perfect", "book it"
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "name": "service_type",
+      "values": [
+        {
+          "value": "in_call",
+          "synonyms": ["in-call", "home visit", "come to me", "at home", "my place", "in call"]
+        },
+        {
+          "value": "out_call", 
+          "synonyms": ["out-call", "clinic", "office", "your place", "come there", "out call"]
+        }
+      ]
+    },
+    {
+      "name": "date_time",
+      "type": "system_datetime"
+    },
+    {
+      "name": "date",
+      "type": "system_date"
+    },
+    {
+      "name": "therapy_types",
+      "values": [
+        {
+          "value": "physical_therapy",
+          "synonyms": ["physical therapy", "physiotherapy", "PT", "physical"]
+        },
+        {
+          "value": "occupational_therapy", 
+          "synonyms": ["occupational therapy", "OT", "occupational"]
+        },
+        {
+          "value": "speech_therapy",
+          "synonyms": ["speech therapy", "speech", "language therapy"]
+        },
+        {
+          "value": "mental_health",
+          "synonyms": ["counseling", "therapy", "mental health", "psychological"]
+        }
+      ]
+    }
+  ],
+  "conversation_flow": {
+    "greeting_flow": {
+      "next_intents": ["book_appointment", "check_availability", "get_services"]
+    },
+    "booking_flow": {
+      "steps": [
+        "collect_service_type",
+        "collect_date_time", 
+        "collect_service_description",
+        "confirm_details",
+        "process_booking"
+      ]
+    }
+  },
+  "responses": {
+    "fallback": [
+      "I'm not sure I understand. Could you please rephrase that?",
+      "I didn't catch that. Can you tell me what you'd like to do? I can help with booking appointments, checking availability, or providing service information.",
+      "Sorry, I need clarification. Are you looking to book an appointment, check our services, or something else?"
+    ],
+    "error": [
+      "I apologize, but I'm having some technical difficulties. Please try again in a moment.",
+      "Something went wrong on my end. Could you please repeat your request?"
+    ]
+  },
+  "settings": {
+    "confidence_threshold": 0.7,
+    "fallback_threshold": 0.3,
+    "session_timeout": 1800,
+    "max_conversation_turns": 50
+  }
+}

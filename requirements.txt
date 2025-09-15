@@ -1,0 +1,50 @@
+# THERAPY BOOKING SYSTEM - REQUIREMENTS
+# Core web framework and API
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+
+# Database and ORM
+mysql-connector-python>=8.2.0
+pymysql>=1.1.0
+sqlalchemy>=2.0.23
+alembic>=1.13.0
+
+# Data validation and serialization
+pydantic>=2.5.0
+
+# HTTP client for external APIs
+aiohttp>=3.9.1
+requests>=2.31.0
+
+# Environment and configuration
+python-dotenv==1.0.0
+
+# AI/ML and ADK client
+google-generativeai==0.3.2
+google-adk==0.1.0
+
+# Date and time utilities
+python-dateutil==2.8.2
+
+# Natural language processing
+nltk==3.8.1
+
+# WhatsApp/SMS services (optional)
+twilio==8.12.0
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Logging and utilities (built-in modules - no installation needed)
+# - asyncio (built-in)
+# - datetime (built-in) 
+# - logging (built-in)
+# - os (built-in)
+# - sys (built-in)
+# - json (built-in)
+# - uuid (built-in)
+# - pathlib (built-in)
+# - getpass (built-in)
+# - subprocess (built-in)
+# - shutil (built-in)
