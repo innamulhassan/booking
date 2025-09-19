@@ -1,0 +1,12 @@
+{
+  "event_type": "message_received",
+  "instanceId": "142693",
+  "data": {
+    "id": "complete_info_test_123",
+    "from": "917401290081@c.us",
+    "to": "97451334514@c.us",
+    "body": "My name is John Smith, phone +917401290081. I need an office visit on Monday 2024-12-23. What times are available?",
+    "fromMe": false,
+    "pushname": "John Smith"
+  }
+}

@@ -16,7 +16,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'other_scripts'))
 
 try:
-    from environment_config import get_config
+    import sys
+    import os
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+    from other_scripts.environment_config import get_config
     env_config = get_config()
 except ImportError:
     env_config = None
@@ -43,7 +46,7 @@ class UltramsgService:
             
             # Critical phone numbers from environment
             self.agent_phone = env_config.AGENT_PHONE_NUMBER
-            self.therapist_phone = env_config.THERAPIST_PHONE_NUMBER
+            self.therapist_phone = env_config.COORDINATOR_PHONE_NUMBER
             
             logger.info(f"✅ Using environment config - Instance: {self.instance_id}")
             logger.info(f"📞 Agent: {self.agent_phone}, Therapist: {self.therapist_phone}")
@@ -58,7 +61,7 @@ class UltramsgService:
             
             # Use fixed phone numbers if not in legacy config
             self.agent_phone = getattr(config, 'AGENT_PHONE_NUMBER', '+97451334514')
-            self.therapist_phone = getattr(config, 'THERAPIST_PHONE_NUMBER', '+97471669569')
+            self.therapist_phone = getattr(config, 'COORDINATOR_PHONE_NUMBER', '+97471669569')
             
             logger.info(f"⚠️  Using legacy config - Instance: {self.instance_id}")
         
@@ -407,6 +410,16 @@ Please reach out to emergency services if you're in immediate danger.
         ).strip()
         
         return await self.send_message(phone, emergency_message)
+    
+    def get_coordinator_phone(self) -> Optional[str]:
+        """Get coordinator phone number from environment config"""
+        try:
+            if env_config and hasattr(env_config, 'COORDINATOR_PHONE_NUMBER'):
+                return env_config.COORDINATOR_PHONE_NUMBER
+            return getattr(config, 'COORDINATOR_PHONE_NUMBER', None)
+        except Exception as e:
+            logger.error(f"Could not get coordinator phone: {e}")
+            return None
     
     async def get_instance_status(self) -> dict:
         """Check if Ultramsg instance is active"""

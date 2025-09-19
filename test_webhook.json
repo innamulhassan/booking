@@ -1,0 +1,12 @@
+{
+  "event_type": "message_received",
+  "instanceId": "142693",
+  "data": {
+    "id": "test_message_123",
+    "from": "917401290081@c.us",
+    "to": "97451334514@c.us",
+    "body": "Can you show me available appointments for tomorrow?",
+    "fromMe": false,
+    "pushname": "Test User"
+  }
+}

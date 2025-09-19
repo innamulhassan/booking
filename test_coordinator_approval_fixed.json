@@ -1,0 +1,15 @@
+{
+  "instanceId": "instance142693",
+  "token": "nev4qbomcglyqbb4",
+  "data": {
+    "id": "1234567890",
+    "body": "Yes, approve appointment 456",
+    "type": "text",
+    "timestamp": "1726656000",
+    "from": "+97471669569",
+    "to": "+97451334514",
+    "fromMe": false,
+    "quoted": false,
+    "forward": false
+  }
+}

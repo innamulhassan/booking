@@ -1,0 +1,12 @@
+{
+  "event_type": "message_received",
+  "instanceId": "142693",
+  "data": {
+    "id": "therapist_direct_test_001",
+    "from": "917401290081@c.us",
+    "to": "97451334514@c.us",
+    "body": "Hello Doctor, I would like to schedule an appointment for next Tuesday if possible",
+    "fromMe": false,
+    "pushname": "Sarah Johnson"
+  }
+}

@@ -1,0 +1,252 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "therapy-booking-system"
+version = "2.0.0"
+description = "WhatsApp-based therapy booking system with AI integration and modern architecture"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Therapy Booking Team", email = "dev@therapybooking.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Healthcare Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Framework :: FastAPI",
+    "Topic :: Communications :: Chat",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
+requires-python = ">=3.8"
+
+dependencies = [
+    # Core FastAPI dependencies
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.22.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    
+    # Database dependencies
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.11.0",
+    "pymysql>=1.0.0",
+    "cryptography>=41.0.0",  # For MySQL SSL
+    
+    # HTTP client dependencies
+    "httpx>=0.24.0",
+    "aiohttp>=3.8.0",
+    "requests>=2.31.0",
+    
+    # Google ADK dependencies
+    "google-adk>=1.0.0",
+    "google-auth>=2.20.0",
+    "google-cloud-logging>=3.5.0",
+    
+    # WhatsApp/Messaging dependencies
+    "twilio>=8.5.0",
+    "python-whatsapp-business>=1.0.0",
+    
+    # Utility dependencies
+    "python-dateutil>=2.8.0",
+    "pytz>=2023.3",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1.0",
+    
+    # Logging and monitoring
+    "structlog>=23.1.0",
+    "rich>=13.4.0",
+    
+    # Security
+    "python-multipart>=0.0.6",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-timeout>=2.1.0",
+    "httpx>=0.24.0",  # For FastAPI testing
+    "factory-boy>=3.2.0",
+    "faker>=18.0.0",
+    "freezegun>=1.2.0",
+    
+    # Code quality
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.4.0",
+    "bandit>=1.7.0",
+    "pre-commit>=3.3.0",
+    
+    # Development tools
+    "ipython>=8.14.0",
+    "ipdb>=0.13.0",
+    "watchfiles>=0.19.0",
+    
+    # Documentation
+    "mkdocs>=1.4.0",
+    "mkdocs-material>=9.1.0",
+    "mkdocstrings[python]>=0.22.0",
+]
+
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-timeout>=2.1.0",
+    "httpx>=0.24.0",
+    "factory-boy>=3.2.0",
+    "faker>=18.0.0",
+    "freezegun>=1.2.0",
+]
+
+docs = [
+    "mkdocs>=1.4.0",
+    "mkdocs-material>=9.1.0",
+    "mkdocstrings[python]>=0.22.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/therapy-booking/therapy-booking-system"
+Documentation = "https://therapy-booking.github.io/therapy-booking-system"
+Repository = "https://github.com/therapy-booking/therapy-booking-system.git"
+Issues = "https://github.com/therapy-booking/therapy-booking-system/issues"
+
+[project.scripts]
+therapy-booking = "src.therapy_booking.main:main"
+therapy-booking-server = "src.therapy_booking.main:run_server"
+therapy-booking-migrate = "src.therapy_booking.models.database:run_migrations"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["therapy_booking*"]
+
+[tool.setuptools.package-data]
+therapy_booking = ["py.typed"]
+
+# Testing configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--disable-warnings",
+    "-v",
+    "--tb=short",
+    "--cov=src/therapy_booking",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-fail-under=80",
+]
+markers = [
+    "unit: Unit tests with mocked dependencies",
+    "integration: Integration tests with real services",
+    "e2e: End-to-end tests",
+    "slow: Slow running tests",
+    "external: Tests requiring external services",
+]
+asyncio_mode = "auto"
+
+# Code formatting with Black
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | migrations/versions
+)/
+'''
+
+# Import sorting with isort
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+src_paths = ["src", "tests"]
+skip_glob = ["migrations/versions/*.py"]
+
+# Type checking with mypy
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "google.adk.*",
+    "twilio.*",
+    "ultramsg.*",
+    "pytest_mock.*",
+]
+ignore_missing_imports = true
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src/therapy_booking"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/test_*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+# Security checks with bandit
+[tool.bandit]
+exclude_dirs = ["tests", "migrations"]
+skips = ["B101", "B601"]  # Skip assert_used and shell_injection tests for test files

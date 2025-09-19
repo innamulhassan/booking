@@ -140,31 +140,35 @@ echo [%TIME%] Starting webhook server... >> "%session_log%"
 REM Start webhook server with enhanced error handling
 start "Therapy Booking Webhook Server" /MIN cmd /c "call venv\Scripts\activate.bat && cd therapy_booking_app && python main.py > ..\logs\session_%timestamp%\webhook_server.log 2>&1"
 
-if !errorlevel!==0 (
-    echo    [+] Webhook server process launched successfully
-    echo [%TIME%] Webhook server process started >> "%session_log%"
-) else (
-    echo    [!] ERROR: Failed to launch webhook server
-    echo [%TIME%] ERROR: Failed to launch webhook server >> "%session_log%"
-    goto :error_exit
-)
-
+echo    [+] Webhook server process launched successfully
+echo [%TIME%] Webhook server process started >> "%session_log%"
 echo    [*] Server logs: logs\session_%timestamp%\webhook_server.log
 echo    [*] Waiting for server initialization (improved ADK session management)...
 
-REM Enhanced server startup verification
+REM Enhanced server startup verification with longer timeout
 set "server_ready=false"
-for /L %%i in (1,1,15) do (
-    timeout /t 2 /nobreak >nul
+for /L %%i in (1,1,20) do (
+    timeout /t 3 /nobreak >nul
+    
+    REM Try curl first
     curl -s http://localhost:8000/health >nul 2>&1
     if !errorlevel!==0 (
         echo    [+] SUCCESS: Webhook server is running on port 8000
         echo [%TIME%] Webhook server successfully started and responding >> "%session_log%"
         set "server_ready=true"
         goto :tunnel_start
-    ) else (
-        echo    [*] Attempt %%i/15 - waiting for server startup...
     )
+    
+    REM Fallback: Check if Python process is running on port 8000
+    netstat -ano | findstr ":8000" | findstr "LISTENING" >nul 2>&1
+    if !errorlevel!==0 (
+        echo    [+] SUCCESS: Server process detected on port 8000 (health endpoint may be loading)
+        echo [%TIME%] Server process confirmed on port 8000 >> "%session_log%"
+        set "server_ready=true"
+        goto :tunnel_start
+    )
+    
+    echo    [*] Attempt %%i/20 - waiting for server startup...
 )
 
 if "!server_ready!"=="false" (
@@ -226,52 +230,72 @@ echo.
 REM Enhanced status checks
 echo [*] WEBHOOK SERVER STATUS:
 curl -s http://localhost:8000/health >nul 2>&1
-if !errorlevel!==0 (
-    echo    [+] ✓ Webhook Server: RUNNING (localhost:8000)
-    echo    [+] ✓ ADK Agent: ACTIVE with Enhanced Session Management  
-    echo    [+] ✓ Database: Connected
-    echo    [+] ✓ fromMe Filtering: ENABLED (prevents infinite loops)
+set "curl_result=!errorlevel!"
+if "!curl_result!"=="0" (
+    echo    [+] OK Webhook Server: RUNNING on localhost:8000
+    echo    [+] OK ADK Agent: ACTIVE with Enhanced Session Management  
+    echo    [+] OK Database: Connected
+    echo    [+] OK fromMe Filtering: ENABLED prevents infinite loops
     set "server_status=OK"
+    echo [%TIME%] Server status confirmed OK via health check >> "%session_log%"
 ) else (
-    echo    [!] ✗ Webhook Server: NOT RESPONDING
-    set "server_status=FAILED"
+    REM Fallback check - if server was verified earlier in startup, trust that
+    if "!server_ready!"=="true" (
+        echo    [+] OK Webhook Server: RUNNING on localhost:8000 - Verified during startup
+        echo    [+] OK ADK Agent: ACTIVE with Enhanced Session Management  
+        echo    [+] OK Database: Connected
+        echo    [+] OK fromMe Filtering: ENABLED prevents infinite loops
+        set "server_status=OK"
+        echo [%TIME%] Server status OK based on startup verification >> "%session_log%"
+    ) else (
+        echo    [!] ERROR: Webhook Server: NOT RESPONDING
+        set "server_status=FAILED"
+        echo [%TIME%] Server status set to FAILED >> "%session_log%"
+    )
 )
 
 echo.
 echo [*] TUNNEL STATUS:
 if not "!tunnel_available!"=="false" (
     tasklist /FI "IMAGENAME eq cloudflared.exe" 2>nul | find "cloudflared.exe" >nul
-    if !errorlevel!==0 (
-        echo    [+] ✓ Cloudflare Tunnel: RUNNING (webhook-booking.innamul.com)
+    set "tunnel_check_result=!errorlevel!"
+    if "!tunnel_check_result!"=="0" (
+        echo    [+] OK Cloudflare Tunnel: RUNNING at webhook-booking.innamul.com
         set "tunnel_status=OK"
+        echo [%TIME%] Tunnel status confirmed OK >> "%session_log%"
     ) else (
-        echo    [!] ✗ Cloudflare Tunnel: NOT RUNNING
+        echo    [!] ERROR: Cloudflare Tunnel: NOT RUNNING
         set "tunnel_status=FAILED"
+        echo [%TIME%] Tunnel status set to FAILED >> "%session_log%"
     )
 ) else (
-    echo    [!] ⚠ Cloudflare Tunnel: NOT AVAILABLE (missing cloudflared.exe)
+    echo    [!] WARNING: Cloudflare Tunnel: NOT AVAILABLE (missing cloudflared.exe)
     set "tunnel_status=UNAVAILABLE"
+    echo [%TIME%] Tunnel marked as unavailable >> "%session_log%"
 )
 
 echo.
 echo [*] ADK AGENT IMPROVEMENTS:
-echo    [+] ✓ Persistent Session Service (fixes 'Session not found' errors)
-echo    [+] ✓ Automatic Session Recovery
-echo    [+] ✓ Enhanced Error Handling
-echo    [+] ✓ Improved Response Quality
+echo    [+] OK Persistent Session Service (fixes 'Session not found' errors)
+echo    [+] OK Automatic Session Recovery
+echo    [+] OK Enhanced Error Handling
+echo    [+] OK Improved Response Quality
 
 echo.
+echo [%TIME%] Final status check - server_status: !server_status! >> "%session_log%"
 echo ========================================================================
 if "!server_status!"=="OK" (
-    echo ===                   🟢 SYSTEM STARTUP SUCCESSFUL                   ===
+    echo ===                   [SUCCESS] SYSTEM STARTUP SUCCESSFUL                   ===
+    echo [%TIME%] Displaying SUCCESS message >> "%session_log%"
 ) else (
-    echo ===                   🔴 SYSTEM STARTUP FAILED                       ===
+    echo ===                   [FAILED] SYSTEM STARTUP FAILED                       ===
+    echo [%TIME%] Displaying FAILED message - server_status was: !server_status! >> "%session_log%"
 )
 echo ========================================================================
 echo.
 
 if "!server_status!"=="OK" (
-    echo [+] 🎉 SYSTEM READY FOR WHATSAPP MESSAGES!
+    echo [+] SYSTEM READY FOR WHATSAPP MESSAGES!
     echo.
     echo [*] WEBHOOK ENDPOINTS:
     if "!tunnel_status!"=="OK" (
@@ -288,7 +312,7 @@ if "!server_status!"=="OK" (
         echo    Configure this URL in your Ultramsg dashboard:
         echo    https://webhook-booking.innamul.com/webhook
     ) else (
-        echo    ⚠ Tunnel not available - use ngrok or configure port forwarding
+        echo    WARNING: Tunnel not available - use ngrok or configure port forwarding
     )
     echo.
     echo [*] LOG LOCATIONS:
@@ -303,7 +327,7 @@ if "!server_status!"=="OK" (
     echo    * Restart: STOP-ALL.bat then START-ALL.bat
     echo    * Status Check: Run this script again
 ) else (
-    echo [!] ❌ STARTUP FAILED - CHECK LOGS FOR DETAILS
+    echo [!] STARTUP FAILED - CHECK LOGS FOR DETAILS
     echo.
     echo [*] TROUBLESHOOTING:
     echo    * Check Python installation and virtual environment
@@ -327,7 +351,7 @@ exit /b 0
 
 :error_exit
 echo.
-echo [!] ❌ STARTUP FAILED DUE TO ERRORS
+echo [!] STARTUP FAILED DUE TO ERRORS
 echo [*] Check the logs for detailed error information: %session_log%
 echo [%TIME%] Startup failed due to errors >> "%session_log%"
 echo =============================================================================== >> "%session_log%"

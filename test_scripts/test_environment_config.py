@@ -30,7 +30,7 @@ try:
         print("\n✅ CONFIGURATION TEST PASSED!")
         print(f"   • Server will run on port {config.SERVER_PORT}")
         print(f"   • Agent phone: {config.AGENT_PHONE_NUMBER}")
-        print(f"   • Therapist phone: {config.THERAPIST_PHONE_NUMBER}")
+        print(f"   • Coordinator phone: {config.COORDINATOR_PHONE_NUMBER}")
         print(f"   • Webhook URL: {config.WEBHOOK_URL}")
         print(f"   • Database: {config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}")
     else:

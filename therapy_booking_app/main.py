@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from contextlib import asynccontextmanager
 from app.api.webhooks import router as webhooks_router
 from app.api.therapist import router as therapist_router
 from app.models.database import create_tables
@@ -12,11 +13,33 @@ import logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler"""
+    # Startup
+    logger.info("Starting Therapy Booking WhatsApp Bot...")
+    
+    # Create database tables
+    try:
+        create_tables()
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Error creating database tables: {str(e)}")
+        raise
+    
+    logger.info("Application started successfully")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down Therapy Booking WhatsApp Bot...")
+
 # Create FastAPI app
 app = FastAPI(
     title="Therapy Booking WhatsApp Bot",
     description="A WhatsApp Business integration for therapy booking management",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Add CORS middleware
@@ -31,26 +54,6 @@ app.add_middleware(
 # Include routers
 app.include_router(webhooks_router)
 app.include_router(therapist_router)
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize application on startup"""
-    logger.info("Starting Therapy Booking WhatsApp Bot...")
-    
-    # Create database tables
-    try:
-        create_tables()
-        logger.info("Database tables created successfully")
-    except Exception as e:
-        logger.error(f"Error creating database tables: {str(e)}")
-        raise
-    
-    logger.info("Application started successfully")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on application shutdown"""
-    logger.info("Shutting down Therapy Booking WhatsApp Bot...")
 
 @app.get("/")
 async def root():

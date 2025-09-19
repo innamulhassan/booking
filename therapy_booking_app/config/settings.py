@@ -69,11 +69,11 @@ class Config:
     PORT = 8000       # FIXED - Always use port 8000 (DO NOT CHANGE)
     
     # Phone Numbers Configuration (CRITICAL - FROM ENVIRONMENT)
-    AGENT_PHONE_NUMBER = "+97451334514"      # Agent/Bot WhatsApp number (FIXED)
-    THERAPIST_PHONE_NUMBER = "+97471669569"  # Therapist contact number (FIXED) 
+    AGENT_PHONE_NUMBER = os.getenv('AGENT_PHONE_NUMBER', '+97451334514')      # Agent/Bot WhatsApp number
+    COORDINATOR_PHONE_NUMBER = os.getenv('COORDINATOR_PHONE_NUMBER', '+97471669569')  # Coordinator contact number
     
-    # Legacy compatibility
-    THERAPIST_PHONE = THERAPIST_PHONE_NUMBER
+    # Legacy compatibility  
+    THERAPIST_PHONE = COORDINATOR_PHONE_NUMBER
     CLIENT_WEBHOOK_URL = os.getenv('CLIENT_WEBHOOK_URL')
     THERAPIST_WEBHOOK_URL = os.getenv('THERAPIST_WEBHOOK_URL')
 

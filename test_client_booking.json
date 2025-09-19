@@ -1,0 +1,15 @@
+{
+  "instanceId": "instance142693",
+  "token": "nev4qbomcglyqbb4",
+  "data": {
+    "id": "test_client_001",
+    "body": "Hi, I need to book a therapy appointment",
+    "type": "text",
+    "timestamp": "1726656000",
+    "from": "+917401290081",
+    "to": "+97451334514",
+    "fromMe": false,
+    "quoted": false,
+    "forward": false
+  }
+}

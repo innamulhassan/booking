@@ -5,17 +5,25 @@ from app.models.schemas import WhatsAppMessage
 from app.services.ultramsg_service import ultramsg_service
 from app.services.adk_agent_service import adk_service
 from app.services.booking_service import booking_service
+
+# New enhanced services
+from app.services.coordinator_nlp_service import coordinator_nlp_service, ResponseType
+from app.services.notification_service import notification_service, MessageType, NotificationRequest
+from app.services.error_handler import error_handler, ErrorCategory, ErrorSeverity, ErrorContext
+from app.services.config_service import config_service
+
 import logging
 import json
+import asyncio
 from datetime import datetime, date, timedelta
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-async def process_therapist_message(db: Session, message_text: str, therapist_phone: str, session_id: str) -> str:
+async def process_therapist_message(db: Session, message_text: str, coordinator_phone: str, session_id: str) -> str:
     """
-    Process messages from therapist with admin-level responses
+    Process messages from coordinator with admin-level responses
     Provides system status, client updates, booking information
     """
     try:
@@ -173,7 +181,7 @@ Need details on any specific area?"""
                 
                 return schedule
             else:
-                return f"📅 **Today's Schedule - {today.strftime('%B %d, %Y')}**\n\n✨ No appointments scheduled for today.\n\nEnjoy your free time! 😊"
+                return f"**Today's Schedule - {today.strftime('%B %d, %Y')}**\n\nNo appointments scheduled for today.\n\nEnjoy your free time! :)"
 
         # Help and available commands
         elif any(word in message_lower for word in ['help', 'commands', 'what can']):
@@ -194,7 +202,7 @@ Need details on any specific area?"""
 • "Help" - Show this command list
 • "Statistics" - Detailed system metrics
 
-Just message me naturally - I understand context! 😊
+Just message me naturally - I understand context! :)
 
 Example: "How's it going today?" or "Any recent client bookings?" """
 
@@ -244,16 +252,241 @@ Example: "How's it going today?" or "Any recent client bookings?" """
             # Use the regular ADK agent for complex queries
             bot_response = await adk_service.process_message(
                 message_text,
-                therapist_phone,
+                coordinator_phone,
                 session_id
             )
             
-            # Add therapist context note
-            return f"{bot_response}\n\n---\n💡 **Therapist Note:** Use commands like 'status', 'today', 'recent' for quick admin info!"
+            # Add coordinator context note
+            return f"{bot_response}\n\n---\n💡 **Coordinator Note:** Use commands like 'status', 'today', 'recent' for quick admin info!"
 
     except Exception as e:
-        logger.error(f"Error processing therapist message: {e}")
+        logger.error(f"Error processing coordinator message: {e}")
         return f"⚠️ **System Error:** Having trouble processing your request.\n\nError: {str(e)}\n\nPlease try again or contact system admin."
+
+async def process_coordinator_response(db: Session, message_text: str, coordinator_phone: str) -> str:
+    """
+    Process coordinator approval/decline/modify responses for appointments
+    Handles natural human responses like 'approve', 'yes', 'ok', 'decline', 'no' with typos
+    Returns response message if handled, None if not an appointment response
+    """
+    try:
+        # Create error context for better tracking
+        context = ErrorContext(
+            user_phone=coordinator_phone,
+            endpoint="coordinator_response",
+            request_data={"message": message_text},
+            user_action="coordinator_approval"
+        )
+        
+        # Find the most recent pending appointment
+        from app.models.models import Appointment, AppointmentStatus
+        recent_pending = db.query(Appointment).filter(
+            Appointment.status == AppointmentStatus.PENDING
+        ).order_by(Appointment.created_at.desc()).first()
+        
+        if not recent_pending:
+            return None  # No pending appointments to process
+        
+        # Process message using NLP service
+        processed_response = coordinator_nlp_service.process_response(message_text)
+        
+        # Check if response is actionable (not UNKNOWN)
+        if processed_response.response_type == ResponseType.UNKNOWN:
+            return None  # Not an appointment response
+        
+        # Handle based on response type using new NLP service
+        if processed_response.response_type == ResponseType.APPROVAL:
+            logger.info(f"✅ NLP Service detected APPROVAL (confidence: {processed_response.confidence:.0%})")
+            # Continue to original approval logic below
+        elif processed_response.response_type == ResponseType.DECLINE:
+            logger.info(f"❌ NLP Service detected DECLINE (confidence: {processed_response.confidence:.0%})")
+            # Continue to original decline logic below
+        elif processed_response.response_type == ResponseType.MODIFICATION:
+            logger.info(f"🔄 NLP Service detected MODIFICATION (confidence: {processed_response.confidence:.0%})")
+            # Continue to original modification logic below
+        else:
+            return f"🤔 I understood your message (confidence: {processed_response.confidence:.0%}) but I'm not sure how to handle that action. Could you please be more specific?"
+        
+        # Prepare clean message for fallback pattern matching
+        clean_message = message_text.lower().strip()
+        
+        # Smart pattern matching for approval (handle typos and variations)
+        approval_patterns = [
+            'approve', 'approved', 'aprove', 'aproved', 'approv', 'aproov',
+            'yes', 'ye', 'yea', 'yeah', 'yep', 'yup', 'y',
+            'ok', 'okay', 'oke', 'okey', 'k',
+            'confirm', 'confirmed', 'confrim', 'conferm', 'good', 'fine', 'accept'
+        ]
+        
+        # Smart pattern matching for decline
+        decline_patterns = [
+            'decline', 'declined', 'declin', 'declne', 'reject', 'rejected',
+            'no', 'nope', 'nah', 'n', 'not', 'cancel', 'cancelled',
+            'deny', 'denied', 'refuse', 'refused'
+        ]
+        
+        # Check if message contains approval words
+        is_approval = any(pattern in clean_message for pattern in approval_patterns)
+        is_decline = any(pattern in clean_message for pattern in decline_patterns)
+        
+        # Handle explicit appointment ID (like "APPROVE 6" or "approve 6" or "yes 6")
+        import re
+        id_match = re.search(r'\b(\d+)\b', clean_message)
+        if id_match:
+            appointment_id = int(id_match.group(1))
+            # Verify this appointment exists and is pending
+            specific_appointment = db.query(Appointment).filter(
+                Appointment.id == appointment_id,
+                Appointment.status == AppointmentStatus.PENDING
+            ).first()
+            if specific_appointment:
+                recent_pending = specific_appointment
+        
+        if is_approval and not is_decline:
+            appointment_id = recent_pending.id
+            
+            # Get the appointment
+            from app.models.models import Appointment, AppointmentStatus
+            appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+            
+            if not appointment:
+                return f"❌ Appointment #{appointment_id} not found."
+            
+            if appointment.status != AppointmentStatus.PENDING:
+                return f"❌ Appointment #{appointment_id} is not pending (Status: {appointment.status.value})"
+            
+            # Confirm the appointment
+            try:
+                confirmed_appointment = booking_service.confirm_appointment(db, appointment_id)
+                
+                # Send confirmation to client using Layla's personality
+                client_phone = confirmed_appointment.client.phone_number
+                client_name = confirmed_appointment.client.name
+                
+                # Get service details
+                service_details = confirmed_appointment.service_description or "therapy session"
+                appointment_date = confirmed_appointment.preferred_datetime.strftime('%Y-%m-%d')
+                appointment_time = confirmed_appointment.preferred_datetime.strftime('%H:%M')
+                
+                client_confirmation = f"""All done, my love! ✨ 
+
+Your appointment has been beautifully confirmed:
+
+📅 Date: {appointment_date}
+⏰ Time: {appointment_time}
+🏥 Service: {service_details}
+� Everything is perfectly arranged for you!
+
+I've taken care of all the details. Just relax and I'll see you then, habibti! If you need anything else, you know I'm always here for you. 💕
+
+Reference #{confirmed_appointment.id}"""
+
+                # Send to client
+                from app.services.ultramsg_service import ultramsg_service
+                asyncio.create_task(ultramsg_service.send_message(f"+{client_phone}", client_confirmation))
+                
+                return f"✅ APPROVED: Appointment #{appointment_id} confirmed!\n\n📤 Layla sent beautiful confirmation to {client_name} ({client_phone})"
+                
+            except Exception as e:
+                logger.error(f"Error confirming appointment: {e}")
+                return f"❌ Error confirming appointment #{appointment_id}: {str(e)}"
+        
+        elif is_decline and not is_approval:
+            # Handle decline/rejection
+            appointment_id = recent_pending.id
+            
+            # Cancel the appointment
+            try:
+                cancelled_appointment = booking_service.cancel_appointment(db, appointment_id, "Declined by coordinator")
+                
+                # Send cancellation to client
+                client_phone = cancelled_appointment.client.phone_number
+                client_name = cancelled_appointment.client.name
+                
+                client_message = f"""Oh my love, I have some news about your appointment... 💔
+
+I've been working so hard to arrange everything perfectly for you, but unfortunately we need to adjust your request due to some scheduling challenges on our end.
+
+But don't worry habibti! Let me help you find an even better solution:
+
+✨ I can check different times that work perfectly
+💫 Look at alternative days that suit you better  
+🌟 Maybe find you an even more amazing slot!
+
+Just tell me what would work best for you, and I'll make it happen. You know I always take care of you, my dear! 💕
+
+What do you think? 💖"""
+
+                # Send to client
+                from app.services.ultramsg_service import ultramsg_service
+                asyncio.create_task(ultramsg_service.send_message(f"+{client_phone}", client_message))
+                
+                return f"❌ DECLINED: Appointment #{appointment_id} cancelled.\n\n📤 Alternative options sent to {client_name} ({client_phone})"
+                
+            except Exception as e:
+                logger.error(f"Error cancelling appointment: {e}")
+                return f"❌ Error declining appointment #{appointment_id}: {str(e)}"
+        
+        else:
+            # Check if this looks like a modification request (contains keywords)
+            modify_patterns = ['change', 'modify', 'different', 'reschedule', 'move', 'shift']
+            is_modification = any(pattern in clean_message for pattern in modify_patterns)
+            
+            if is_modification:
+                appointment_id = recent_pending.id
+                modification_reason = message_text.strip()  # Use original message as reason
+            
+            # Get the appointment
+            from app.models.models import Appointment, AppointmentStatus
+            appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+            
+            if not appointment:
+                return f"❌ Appointment #{appointment_id} not found."
+            
+            if appointment.status != AppointmentStatus.PENDING:
+                return f"❌ Appointment #{appointment_id} is not pending (Status: {appointment.status.value})"
+            
+            # Send modification request to client
+            try:
+                client_phone = appointment.client.phone_number
+                client_name = appointment.client.name
+                
+                client_message = f"""📝 BOOKING MODIFICATION REQUEST
+
+Dear {client_name},
+
+Regarding your appointment #{appointment_id}:
+
+Our coordinator has reviewed your booking and suggests the following modification:
+
+📝 **Coordinator Note:** {modification_reason}
+
+Would you like to:
+• Accept this modification
+• Suggest an alternative
+• Reschedule for a different time
+
+Please let me know your preference, and I'll help arrange the best solution for you.
+
+Best regards,
+Wellness Therapy Center"""
+
+                # Send to client
+                from app.services.ultramsg_service import ultramsg_service
+                asyncio.create_task(ultramsg_service.send_message(f"+{client_phone}", client_message))
+                
+                return f"📝 MODIFICATION: Request sent to {client_name} ({client_phone})\n\nReason: {modification_reason}\n\nAppointment #{appointment_id} remains pending until client responds."
+                
+            except Exception as e:
+                logger.error(f"Error processing modification: {e}")
+                return f"❌ Error processing modification for appointment #{appointment_id}: {str(e)}"
+        
+        # Not an appointment response
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error processing coordinator response: {e}")
+        return f"❌ Error processing coordinator response: {str(e)}"
 
 @router.post("/webhook")
 async def general_webhook(
@@ -282,8 +515,59 @@ async def general_webhook(
             payload = await request.json()
             logger.info(f"JSON payload: {payload}")
             
+            # Handle WhatsApp Business API webhook format (entry structure)
+            if 'entry' in payload and payload['entry'] and len(payload['entry']) > 0:
+                entry = payload['entry'][0]
+                if 'changes' in entry and entry['changes'] and len(entry['changes']) > 0:
+                    change = entry['changes'][0]
+                    if 'value' in change and 'messages' in change['value'] and change['value']['messages']:
+                        # WhatsApp Business API format
+                        message = change['value']['messages'][0]
+                        from_phone = message.get('from', '')
+                        message_id = message.get('id', '')
+                        message_type = message.get('type', 'text')
+                        
+                        # Extract text from nested structure
+                        if message_type == 'text' and 'text' in message:
+                            message_text = message['text'].get('body', '')
+                        else:
+                            message_text = message.get('body', '')
+                        
+                        # Get contact info if available
+                        pushname = ''
+                        contacts = change['value'].get('contacts', [])
+                        if contacts and 'profile' in contacts[0] and 'name' in contacts[0]['profile']:
+                            pushname = contacts[0]['profile']['name']
+                        
+                        to_phone = change['value'].get('metadata', {}).get('phone_number_id', '')
+                        from_me = False  # Incoming messages from clients
+            
+            # Handle direct messages format (fallback)
+            elif 'messages' in payload and payload['messages']:
+                # Direct message format
+                message = payload['messages'][0]
+                from_phone = message.get('from', '')
+                message_id = message.get('id', '')
+                message_type = message.get('type', 'text')
+                
+                # Extract text from nested structure
+                if message_type == 'text' and 'text' in message:
+                    message_text = message['text'].get('body', '')
+                else:
+                    message_text = message.get('body', '')
+                
+                # Get contact info if available
+                pushname = ''
+                if 'contacts' in payload and payload['contacts']:
+                    contact = payload['contacts'][0]
+                    if 'profile' in contact and 'name' in contact['profile']:
+                        pushname = contact['profile']['name']
+                
+                to_phone = payload.get('metadata', {}).get('phone_number_id', '')
+                from_me = False  # Incoming messages from clients
+                
             # Ultramsg sends data in nested structure
-            if 'data' in payload:
+            elif 'data' in payload:
                 data = payload['data']
                 from_phone = data.get('from', '')
                 to_phone = data.get('to', '')
@@ -291,6 +575,7 @@ async def general_webhook(
                 message_id = data.get('id', '')
                 message_type = data.get('type', 'text')
                 from_me = data.get('fromMe', False)
+                pushname = data.get('pushname', '')
                 
                 # Skip messages sent by us (outbound messages)
                 if from_me:
@@ -308,6 +593,7 @@ async def general_webhook(
                 message_id = payload.get('id', '')
                 message_type = payload.get('type', 'text')
                 from_me = payload.get('fromMe', False)
+                pushname = payload.get('pushname', '')
                 
                 # Skip messages sent by us (outbound messages)
                 if from_me:
@@ -329,31 +615,40 @@ async def general_webhook(
             message_id = (form_data.get('id') or form_data.get('messageId') or 
                          form_data.get('msgId') or '')
             message_type = (form_data.get('type') or form_data.get('messageType') or 'text')
+            pushname = (form_data.get('pushname') or form_data.get('pushName') or 
+                       form_data.get('name') or form_data.get('displayName') or '')
         
         # Clean phone numbers (handle Ultramsg format: "97471669569@c.us")
         sender_phone = from_phone.replace('whatsapp:', '').replace('+', '').split('@')[0]
         receiver_phone = to_phone.replace('whatsapp:', '').replace('+', '').split('@')[0]
         
         logger.info(f"Webhook received - From: {sender_phone}, To: {receiver_phone}, Message: {message_text}")
+        logger.info(f"Message type debug: '{message_type}' (type: {type(message_type)}, len: {len(message_type) if isinstance(message_type, str) else 'N/A'})")
         
         # Skip non-text messages for now
         if message_type != 'text' or not message_text:
-            logger.info(f"Skipping non-text message type: {message_type}")
+            logger.info(f"Skipping non-text message type: '{message_type}' != 'text' is {message_type != 'text'}")
             return {"status": "ok", "message": "Non-text message ignored"}
         
-        # Determine if sender is therapist or client
-        # Use known phone numbers from environment
-        therapist_phone = "97471669569"  # Therapist number without +
-        agent_phone = "97451334514"      # Agent number without +
+        # Determine if sender is coordinator or client
+        # Use known phone numbers from environment config
+        try:
+            from config.settings import config
+            coordinator_phone = config.COORDINATOR_PHONE_NUMBER.replace('+', '')  # Remove + for comparison
+            agent_phone = config.AGENT_PHONE_NUMBER.replace('+', '')
+        except Exception as e:
+            logger.warning(f"Could not load config, using fallback numbers: {e}")
+            coordinator_phone = "97471669569"  # Fallback coordinator number
+            agent_phone = "97451334514"      # Fallback agent number
         
         # Route message based on sender
-        if sender_phone == therapist_phone:
-            # Message from therapist - handle immediately without delay
-            user_type = "therapist"
-            user_name = "Dr. Therapist"
+        if sender_phone == coordinator_phone:
+            # Message from coordinator - handle immediately without delay
+            user_type = "coordinator"
+            user_name = "Coordinator"
             conversation_type = "therapist_admin"
             
-            # Get or create therapist user
+            # Get or create coordinator user
             user = booking_service.get_or_create_user(
                 db, sender_phone, user_type, name=user_name
             )
@@ -365,13 +660,17 @@ async def general_webhook(
             
             # Save incoming message
             booking_service.save_message(
-                db, conversation.id, "therapist", message_text, message_id
+                db, conversation.id, "coordinator", message_text, message_id
             )
             
-            # Process therapist message with special handling
-            bot_response = await process_therapist_message(
-                db, message_text, sender_phone, conversation.session_id
-            )
+            # Check if this is an approval/decline/modify response
+            bot_response = await process_coordinator_response(db, message_text, sender_phone)
+            
+            # If not an appointment response, use regular therapist message processing
+            if not bot_response:
+                bot_response = await process_therapist_message(
+                    db, message_text, sender_phone, conversation.session_id
+                )
             
         else:
             # Message from client - each phone number is a separate client
@@ -398,7 +697,8 @@ async def general_webhook(
             bot_response = await adk_service.process_message(
                 message_text,
                 sender_phone,
-                conversation.session_id
+                conversation.session_id,
+                pushname
             )
         
         # Save bot response
@@ -478,7 +778,7 @@ async def client_webhook(
         error_message = "Sorry, I'm having trouble processing your message right now. Please try again in a moment."
         return ultramsg_service.create_webhook_response(error_message)
 
-@router.post("/webhook/therapist")
+@router.post("/webhook/coordinator")
 async def therapist_webhook(
     request: Request,
     From: str = Form(...),
@@ -489,34 +789,34 @@ async def therapist_webhook(
     db: Session = Depends(get_db)
 ):
     """
-    Handle incoming WhatsApp messages from therapist
+    Handle incoming WhatsApp messages from coordinator
     """
     try:
         # Clean phone number (remove whatsapp: prefix)
-        therapist_phone = From.replace('whatsapp:', '')
+        coordinator_phone = From.replace('whatsapp:', '')
         message_text = Body
         
-        logger.info(f"Received therapist message from {therapist_phone}: {message_text}")
+        logger.info(f"Received coordinator message from {coordinator_phone}: {message_text}")
         
-        # Get or create therapist user
-        therapist = booking_service.get_or_create_user(
-            db, therapist_phone, "therapist", name="Therapist"
+        # Get or create coordinator user
+        coordinator = booking_service.get_or_create_user(
+            db, coordinator_phone, "coordinator", name="Coordinator"
         )
         
         # Get or create conversation
         conversation = booking_service.get_or_create_conversation(
-            db, therapist.id, "therapist_bot"
+            db, coordinator.id, "therapist_bot"
         )
         
         # Save incoming message
         booking_service.save_message(
-            db, conversation.id, "therapist", message_text, MessageSid
+            db, conversation.id, "coordinator", message_text, MessageSid
         )
         
-        # Process therapist response
+        # Process coordinator response
         bot_response = await adk_service.process_message(
             message_text,
-            therapist_phone,
+            coordinator_phone,
             conversation.session_id
         )
         
@@ -529,7 +829,7 @@ async def therapist_webhook(
         return ultramsg_service.create_webhook_response(bot_response)
         
     except Exception as e:
-        logger.error(f"Error processing therapist webhook: {str(e)}")
+        logger.error(f"Error processing coordinator webhook: {str(e)}")
         error_message = "Sorry, I'm having trouble processing your message. Please try again."
         return ultramsg_service.create_webhook_response(error_message)
 

@@ -22,7 +22,7 @@ class EnvironmentConfig:
         
         # Critical Phone Numbers - READ FROM ENVIRONMENT VARIABLES
         self.AGENT_PHONE_NUMBER = self.get_env('AGENT_PHONE_NUMBER')      # Required from env
-        self.THERAPIST_PHONE_NUMBER = self.get_env('THERAPIST_PHONE_NUMBER')  # Required from env
+        self.COORDINATOR_PHONE_NUMBER = self.get_env('COORDINATOR_PHONE_NUMBER')  # Required from env
         
         # Ultramsg Configuration - READ FROM ENVIRONMENT VARIABLES
         self.ULTRAMSG_INSTANCE_ID = self.get_env('ULTRAMSG_INSTANCE_ID')
@@ -120,9 +120,9 @@ class EnvironmentConfig:
         """Get all configured phone numbers"""
         return {
             "agent_number": self.AGENT_PHONE_NUMBER,
-            "therapist_number": self.THERAPIST_PHONE_NUMBER,
+            "therapist_number": self.COORDINATOR_PHONE_NUMBER,
             "agent_formatted": self.AGENT_PHONE_NUMBER.replace("+", ""),
-            "therapist_formatted": self.THERAPIST_PHONE_NUMBER.replace("+", "")
+            "therapist_formatted": self.COORDINATOR_PHONE_NUMBER.replace("+", "")
         }
     
     def validate_configuration(self) -> bool:
@@ -133,8 +133,8 @@ class EnvironmentConfig:
         if not self.AGENT_PHONE_NUMBER.startswith('+'):
             errors.append("Agent phone number must start with +")
             
-        if not self.THERAPIST_PHONE_NUMBER.startswith('+'):
-            errors.append("Therapist phone number must start with +")
+        if not self.COORDINATOR_PHONE_NUMBER.startswith('+'):
+            errors.append("Coordinator phone number must start with +")
         
         # Validate server port
         if self.SERVER_PORT != 8000:
@@ -174,7 +174,7 @@ class EnvironmentConfig:
         
         print(f"\n📞 PHONE NUMBERS:")
         print(f"   • Agent/Bot: {self.AGENT_PHONE_NUMBER}")
-        print(f"   • Therapist: {self.THERAPIST_PHONE_NUMBER}")
+        print(f"   • Coordinator: {self.COORDINATOR_PHONE_NUMBER}")
         
         print(f"\n📱 ULTRAMSG CONFIGURATION:")
         print(f"   • Instance: {self.ULTRAMSG_INSTANCE_ID}")
